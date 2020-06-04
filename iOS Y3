@@ -1,0 +1,26 @@
+ WITH A AS(  
+  SELECT AB.device_id,AB.abtest_id,AB.abtest_group,AB.created_at  
+  FROM public.pw_abtest_log AB   
+  WHERE AB.abtest_id ='ID_202005_Y3_UPSELL'  
+  AND AB.created_at >='2020-05-28'  
+  AND AB.app_version ='5.5.1.497'  
+  AND AB.source ='pacer_ios'  
+  AND AB.payload='server')  
+
+  SELECT  
+  PX.created_date,(CASE WHEN A.abtest_id IS NULL THEN 'no_abtest_group' ELSE A.abtest_group END) AS ab_group,  
+  COUNT(DISTINCT PX.device_id) install_all,  
+  COUNT(DISTINCT CASE WHEN PX.day1 >0 THEN PX.device_id ELSE NULL END) day1_rr,  
+  COUNT(DISTINCT CASE WHEN PX.day3 >0 THEN PX.device_id ELSE NULL END) day3_rr,  
+  COUNT(DISTINCT CASE WHEN PX.day7 >0 THEN PX.device_id ELSE NULL END) day7_rr,  
+  COUNT(DISTINCT CASE WHEN DATEDIFF(DAY,PX.created_date,SO.created_at) BETWEEN 0 AND 6 AND SO.status='purchase_success' THEN PX.device_id ELSE NULL END) cr_in7  
+
+  FROM public.px_return_record_purged PX   
+  LEFT JOIN A ON PX.device_id=A.device_id  AND A.device_id IN(  SELECT device_id FROM(  SELECT A.device_id,COUNT(DISTINCT A.abtest_group) group_num  FROM A  GROUP BY A.device_id)  WHERE group_num = 1)  
+  LEFT JOIN pacerdb.pw_store_session SS ON SS.device_id=PX.device_id AND SS.created_at >='2020-05-28' AND SS.source<>'unknown'  
+  LEFT JOIN pacerdb.pw_store_operation SO ON SS.session_id=SO.session_id AND SO.created_at >='2020-05-28'  
+
+  WHERE PX.created_date >='2020-05-28'  
+  AND PX.first_app_version='5.5.1.497'  
+  AND PX.source ='pacer_ios'   
+  GROUP BY PX.created_date,ab_group  
